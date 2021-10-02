@@ -1,5 +1,6 @@
 package ru.javawebinar.topjava.util;
 
+import com.sun.tools.internal.xjc.reader.xmlschema.bindinfo.BIConversion;
 import ru.javawebinar.topjava.model.UserMeal;
 import ru.javawebinar.topjava.model.UserMealWithExcess;
 
@@ -8,6 +9,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Month;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class UserMealsUtil {
     public static void main(String[] args) {
@@ -24,14 +26,14 @@ public class UserMealsUtil {
         List<UserMealWithExcess> mealsTo = filteredByCycles(meals, LocalTime.of(7, 0), LocalTime.of(12, 0), 2000);
         mealsTo.forEach(System.out::println);
 
-//        System.out.println(filteredByStreams(meals, LocalTime.of(7, 0), LocalTime.of(12, 0), 2000));
+        System.out.println(filteredByStreams(meals, LocalTime.of(7, 0), LocalTime.of(12, 0), 2000));
     }
 
     public static List<UserMealWithExcess> filteredByCycles(List<UserMeal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
         // TODO return filtered list with excess. Implement by cycles
 
         // группируем элементы по датам
-        Map<LocalDate, List<UserMeal>> map = new HashMap<>();
+        Map<LocalDate, List<UserMeal>> map = new LinkedHashMap<>();
         for (UserMeal userMeal : meals) {
 
             LocalDate key = userMeal.getDateTime().toLocalDate();
@@ -42,16 +44,15 @@ public class UserMealsUtil {
 
 
         List<UserMealWithExcess> userMealWithExcessList = new ArrayList<>();
-        // считаем превышение в рамках одной даты
+        // подсчет превышения в рамках одной даты
         for (LocalDate localDate : map.keySet()) {
             int sum = 0;
+
             for (UserMeal userMeal : map.get(localDate)) {
                 sum += userMeal.getCalories();
             }
-            boolean excess = false;
-            if (sum > caloriesPerDay) {
-                excess = true;
-            }
+            boolean excess = sum > caloriesPerDay;
+
             // фильтруем и содаем финальную сущность с признаком превышения
             for (UserMeal userMeal : map.get(localDate)) {
                 if (! TimeUtil.isBetweenHalfOpen(userMeal.getDateTime().toLocalTime(), startTime, endTime)) continue;
@@ -64,6 +65,23 @@ public class UserMealsUtil {
 
     public static List<UserMealWithExcess> filteredByStreams(List<UserMeal> meals, LocalTime startTime, LocalTime endTime, int caloriesPerDay) {
         // TODO Implement by streams
-        return null;
+
+        // группировка элементов по дате
+        Map<LocalDate, List<UserMeal>> map = meals.stream().collect(Collectors.groupingBy(a -> a.getDateTime().toLocalDate()));
+
+        // сумма значений в рамках одной даты
+        Map<LocalDate, Integer> mapCalories = map.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, v -> (Integer) v.getValue().stream().mapToInt(UserMeal::getCalories).sum()));
+
+        // превышеение для каждой даты
+        Map<LocalDate, Boolean> mapExcess = mapCalories.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, v -> v.getValue() > caloriesPerDay));
+
+        List<UserMealWithExcess> result = meals.stream()
+                .filter(v -> TimeUtil.isBetweenHalfOpen(v.getDateTime().toLocalTime(), startTime, endTime))
+                .map(v -> new UserMealWithExcess(v, mapExcess.get(v.getDateTime().toLocalDate())))
+                .collect(Collectors.toList());
+
+        return result;
     }
 }
